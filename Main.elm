@@ -7,7 +7,7 @@ import Json.Decode as J exposing
   , Value, Decoder, decodeString, decodeValue
   )
 import Dict exposing (Dict)
-import List exposing (take, any)
+import List exposing (take, any, range)
 import Array exposing (Array, get, set, push, length)
 import Char exposing (toCode)
 import String exposing (trim)
@@ -16,7 +16,7 @@ import Ports exposing (..)
 
 
 main =
-  Html.program
+  Html.programWithFlags
     { init = init
     , view = view
     , update = update
@@ -40,21 +40,12 @@ type alias Panel =
   , output : Result ErrorString JSONString
   }
 
-getfilter : Int -> Array Panel -> FilterString
-getfilter index panels = get index panels |> Maybe.map .filter |> Maybe.withDefault "."
-
-getoutput : Int -> Array Panel -> JSONString
-getoutput index panels =
-  get index panels
-    |> Maybe.map .output
-    |> Maybe.map (Result.withDefault "")
-    |> Maybe.withDefault "."
-
-getinputfor : Int -> Model -> String
-getinputfor index model =
-  case index of
-    0 -> model.input
-    _ -> getoutput (index - 1) model.panels
+getfiltersuntil : Int -> Array Panel -> List FilterString
+getfiltersuntil to panels =
+  panels
+    |> Array.toList
+    |> take (to + 1)
+    |> List.map .filter
 
 setfilter : Int -> FilterString -> Array Panel -> Array Panel
 setfilter index filter panels =
@@ -97,19 +88,21 @@ hasNonAsciiLetter s =
           (code > 122)
       )
 
-init : (Model, Cmd Msg)
-init =
+init : { input : String, filters : List String } -> (Model, Cmd Msg)
+init {input, filters} =
   let model =
     { tab = View
-    , input = "{\"x\": 23}"
-    , panels = Array.fromList <|
-      [ Panel True "." (Ok "")
-      , Panel True "" (Ok "")
-      ]
+    , input = input
+    , panels = filters
+      |> List.map (\f -> Panel True f (Ok ""))
+      |> Array.fromList
     }
   in
     ( model
-    , applyfilter (0, model.input, (getfilter 0 model.panels))
+    , Cmd.batch
+      <| List.map
+        (\pi -> applyfilter (model.input, pi, model.panels |> getfiltersuntil pi))
+      <| range 0 (Array.length model.panels)
     )
 
 
@@ -130,7 +123,10 @@ update msg model =
     SelectTab t -> ({ model | tab = t }, Cmd.none)
     SetInput v ->
       ( { model | input = v }
-      , applyfilter (0, v, (getfilter 0 model.panels))
+      , Cmd.batch
+          <| List.map
+            (\pi -> applyfilter (model.input, pi, model.panels |> getfiltersuntil pi))
+          <| range 0 (Array.length model.panels)
       )
     SetFilter i v ->
       let upd = { model | panels = model.panels |> setfilter i v }
@@ -149,7 +145,10 @@ update msg model =
                 { upd | panels = upd.panels |> push (Panel True "" (Ok "")) }
               else -- enable the next panel
                 { upd | panels = upd.panels |> enable (i + 1) }
-            , applyfilter (i, (getinputfor i upd), v)
+            , Cmd.batch
+              <| List.map
+                (\pi -> applyfilter (model.input, pi, upd.panels |> getfiltersuntil pi))
+              <| range i <| (Array.length upd.panels) - 1
             )
     SelectDictItem paneln key ->
       if hasNonAsciiLetter key
@@ -159,9 +158,7 @@ update msg model =
       update (SetFilter (paneln + 1) (".[" ++ toString index ++ "]")) model
     GotResult (i, v) ->
       ( { model | panels = model.panels |> setoutput i v }
-      , if length model.panels > i + 1
-        then applyfilter ((i + 1), v, (getfilter (i + 1) model.panels))
-        else Cmd.none
+      , Cmd.none
       )
     GotError (i, e) ->
       ( { model
@@ -212,7 +209,7 @@ view model =
           panels = List.filter .enabled
             <| Array.toList model.panels
           npanels = List.length panels
-          hidden = if npanels > 4 then npanels - 4 else 0
+          hidden = if npanels > 3 then npanels - 3 else 0
         in
           div [ id "panels", class "columns is-multiline" ]
             <| List.indexedMap (viewPanel hidden)
@@ -222,7 +219,7 @@ view model =
 viewPanel : Int -> Int -> Panel -> Html Msg
 viewPanel hidden i {filter, output} =
   div
-    [ class "panel column is-3"
+    [ class "panel column is-4"
     , style <| if i < hidden then [("display", "none")] else []
     ]
     [ input [ class "input", onInput (SetFilter i), value filter ] []

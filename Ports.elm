@@ -1,6 +1,6 @@
 port module Ports exposing (..)
 
-port applyfilter : (Int, JSONString, FilterString) -> Cmd msg
+port applyfilter : (JSONString, Int, List FilterString) -> Cmd msg
 
 port gotresult : ((Int, JSONString) -> msg) -> Sub msg
 port goterror : ((Int, ErrorString) -> msg) -> Sub msg
