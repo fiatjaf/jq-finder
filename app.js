@@ -7,7 +7,7 @@ const target = document.querySelector('main')
 const app = Elm.Main.embed(target)
 
 app.ports.applyfilter_.subscribe(debounce(([i, input, filter]) => {
-  if (input === '') {
+  if (filter === '' || input === '') {
     app.ports.gotresult.send([i, ''])
     return
   }

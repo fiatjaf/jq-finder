@@ -3,10 +3,11 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Platform.Sub as Sub
 import Json.Decode as J exposing
-  ( string, float, null, bool, dict, array, oneOf
+  ( string, float, null, bool, dict, oneOf
   , Value, Decoder, decodeString, decodeValue
   )
 import Dict exposing (Dict)
+import List exposing (take)
 import Array exposing (Array, get, set, push, length)
 
 import Ports exposing (..)
@@ -181,7 +182,7 @@ viewPanel i {filter, output} =
 type JRepr
   = JScalar JScalarRepr 
   | JDict (Dict String Value)
-  | JArray (Array Value)
+  | JList (List Value)
 
 type JScalarRepr
   = JNull
@@ -196,45 +197,78 @@ multiDecoder = oneOf
   , J.map JScalar <| J.map JNum float
   , J.map JScalar <| null JNull
   , J.map JDict (dict J.value)
-  , J.map JArray (array J.value)
+  , J.map JList (J.list J.value)
   ]
 
 viewJSON : JSONString -> Html Msg
 viewJSON json =
-  case decodeString multiDecoder json of
-    Ok jrepr -> case jrepr of
-      JScalar scalar -> scalarView scalar
-      JDict d -> table [ class "table is-fullwidth is-hoverable" ]
-        [ tbody []
-          <| List.map
-            (\(k, v) ->
-              tr []
-                [ td [] [ text k ]
-                , td [] [ viewValue v ]
-                ]
-            )
-          <| Dict.toList d
-        ]
-      JArray a -> table [ class "table is-fullwidth is-hoverable" ]
-        [ tbody []
-          <| List.indexedMap
-            (\i v ->
-              tr []
-                [ td [] [ text <| toString i ]
-                , td [] [ viewValue v ]
-                ]
-            )
-          <| Array.toList a
-        ]
-    Err e -> text e
+  if String.trim json == ""
+  then text ""
+  else
+    case decodeString multiDecoder json of
+      Ok jrepr -> case jrepr of
+        JScalar scalar -> scalarView scalar
+        JDict d -> table [ class "table is-fullwidth is-hoverable" ]
+          [ tbody []
+            <| List.map
+              (\(k, v) ->
+                tr []
+                  [ td [] [ text k ]
+                  , td [] [ viewValue v ]
+                  ]
+              )
+            <| Dict.toList d
+          ]
+        JList l -> table [ class "table is-fullwidth is-hoverable" ]
+          [ tbody []
+            <| List.indexedMap
+              (\i v ->
+                tr []
+                  [ td [] [ text <| toString i ]
+                  , td [] [ viewValue v ]
+                  ]
+              )
+            <| l
+          ]
+      Err e -> text e
 
 viewValue : Value -> Html Msg
 viewValue jval =
   case decodeValue multiDecoder jval of
     Ok jrepr -> case jrepr of
       JScalar scalar -> scalarView scalar
+      JDict d -> div [ class "sub" ]
+        <| List.concat
+          [ [ text "{" ]
+          , List.intersperse (text ", ")
+            <| List.map dictSubView
+            <| take 3
+            <| Dict.toList d
+          , if Dict.size d > 3 then [ text ", …" ] else []
+          , [ text "}" ]
+          ]
+      JList l -> div [ class "sub" ]
+        <| List.concat
+          [ [ text "[" ]
+          , List.intersperse (text ", ")
+            <| List.map arraySubView
+            <| take 3
+            <| l
+          , if List.length l > 3 then [ text ", …" ] else []
+          , [ text "]" ]
+          ]
+    Err e -> text e
+
+dictSubView : (String, Value) -> Html Msg
+dictSubView (k, _) = span [ class "string" ] [ text k ]
+
+arraySubView : Value -> Html Msg
+arraySubView jval =
+  case decodeValue multiDecoder jval of
+    Ok jrepr -> case jrepr of
+      JScalar scalar -> scalarView scalar
       JDict _ -> text "{}"
-      JArray _ -> text "[]"
+      JList _ -> text "[]"
     Err e -> text e
 
 scalarView : JScalarRepr -> Html Msg
