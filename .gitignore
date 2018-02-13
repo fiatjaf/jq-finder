@@ -1,0 +1,6 @@
+dist/
+node_modules
+elm-stuff
+*.swo
+*.swp
+browserify-cache.json
