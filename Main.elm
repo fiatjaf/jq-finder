@@ -7,8 +7,10 @@ import Json.Decode as J exposing
   , Value, Decoder, decodeString, decodeValue
   )
 import Dict exposing (Dict)
-import List exposing (take)
+import List exposing (take, any)
 import Array exposing (Array, get, set, push, length)
+import Char exposing (toCode)
+import String exposing (trim)
 
 import Ports exposing (..)
 
@@ -82,6 +84,19 @@ seterror index error panels =
     Nothing -> panels
     Just p -> set index { p | output = Err error } panels
 
+hasNonAsciiLetter : String -> Bool
+hasNonAsciiLetter s =
+  String.toList s
+    |> any
+      (\char ->
+        let
+          code = toCode char
+        in
+          (code < 65) ||
+          (code > 90 && code < 97) ||
+          (code > 122)
+      )
+
 init : (Model, Cmd Msg)
 init =
   let model =
@@ -104,6 +119,8 @@ type Msg
   = SelectTab Tab
   | SetInput JSONString
   | SetFilter Int FilterString
+  | SelectDictItem Int String
+  | SelectListItem Int Int
   | GotResult (Int, JSONString)
   | GotError (Int, ErrorString)
 
@@ -134,6 +151,12 @@ update msg model =
                 { upd | panels = upd.panels |> enable (i + 1) }
             , applyfilter (i, (getinputfor i upd), v)
             )
+    SelectDictItem paneln key ->
+      if hasNonAsciiLetter key
+      then update (SetFilter (paneln + 1) (".[" ++ toString key ++ "]")) model
+      else update (SetFilter (paneln + 1) ("." ++ key)) model
+    SelectListItem paneln index ->
+      update (SetFilter (paneln + 1) (".[" ++ toString index ++ "]")) model
     GotResult (i, v) ->
       ( { model | panels = model.panels |> setoutput i v }
       , if length model.panels > i + 1
@@ -197,7 +220,7 @@ viewPanel i {filter, output} =
     [ input [ class "input", onInput (SetFilter i), value filter ] []
     , div [ class "box" ]
       [ case output of
-        Ok json -> viewJSON json
+        Ok json -> viewJSON i json
         Err err -> div [ class "error" ] [ text err ]
       ]
     ]
@@ -224,9 +247,9 @@ multiDecoder = oneOf
   , J.map JList (J.list J.value)
   ]
 
-viewJSON : JSONString -> Html Msg
-viewJSON json =
-  if String.trim json == ""
+viewJSON : Int -> JSONString -> Html Msg
+viewJSON paneln json =
+  if trim json == ""
   then text ""
   else
     case decodeString multiDecoder json of
@@ -236,7 +259,7 @@ viewJSON json =
           [ tbody []
             <| List.map
               (\(k, v) ->
-                tr []
+                tr [ onClick (SelectDictItem paneln k) ]
                   [ td [] [ text k ]
                   , td [] [ viewValue v ]
                   ]
@@ -247,7 +270,7 @@ viewJSON json =
           [ tbody []
             <| List.indexedMap
               (\i v ->
-                tr []
+                tr [ onClick (SelectListItem paneln i) ]
                   [ td [] [ text <| toString i ]
                   , td [] [ viewValue v ]
                   ]
