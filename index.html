@@ -16,19 +16,38 @@ input, textarea, .panel {
   color: #333;
 }
 
+#input {}
+  #input textarea {
+    min-height: 500px;
+  }
+
 .panel {}
   .panel .box { margin-top: 23px }
 
   .panel .error { color: red; }
 
   .panel table { margin-bottom: 0; }
-    .panel table td:last-child { text-align: right; }
     .panel tr { cursor: pointer; }
+    .panel td:first-child {
+      max-width: 92px;
+    }
+    .panel td:last-child {
+      text-align: right;
+      font-size: 80%;
+      max-width: 185px;
+    }
+      .panel td:last-child > * {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        z-index: 5;
+        background: rgba(255,255,255,0.7);
+      }
   .panel .string { color: seagreen }
   .panel .null { color: lightblue }
   .panel .num { color: palevioletred }
   .panel .bool { color: darkblue }
-  .panel .sub { font-size: 0.9em; }
+  .panel .sub {}
     .panel .sub .list { color: olive }
     .panel .sub .object { color: teal }
       .panel .sub .object .key { color: orangered }

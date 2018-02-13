@@ -208,15 +208,23 @@ view model =
           [ textarea [ class "textarea", onInput SetInput ] [ text model.input ]
           ]
       View ->
-         div [ id "panels", class "columns is-multiline" ]
-           <| List.indexedMap viewPanel
-           <| List.filter .enabled
-           <| Array.toList model.panels
+        let
+          panels = List.filter .enabled
+            <| Array.toList model.panels
+          npanels = List.length panels
+          hidden = if npanels > 4 then npanels - 4 else 0
+        in
+          div [ id "panels", class "columns is-multiline" ]
+            <| List.indexedMap (viewPanel hidden)
+            <| panels
     ]
 
-viewPanel : Int -> Panel -> Html Msg
-viewPanel i {filter, output} =
-  div [ class "panel column" ]
+viewPanel : Int -> Int -> Panel -> Html Msg
+viewPanel hidden i {filter, output} =
+  div
+    [ class "panel column is-3"
+    , style <| if i < hidden then [("display", "none")] else []
+    ]
     [ input [ class "input", onInput (SetFilter i), value filter ] []
     , div [ class "box" ]
       [ case output of
@@ -249,35 +257,32 @@ multiDecoder = oneOf
 
 viewJSON : Int -> JSONString -> Html Msg
 viewJSON paneln json =
-  if trim json == ""
-  then text ""
-  else
-    case decodeString multiDecoder json of
-      Ok jrepr -> case jrepr of
-        JScalar scalar -> scalarView scalar
-        JDict d -> table [ class "table is-fullwidth is-hoverable" ]
-          [ tbody []
-            <| List.map
-              (\(k, v) ->
-                tr [ onClick (SelectDictItem paneln k) ]
-                  [ td [] [ text k ]
-                  , td [] [ viewValue v ]
-                  ]
-              )
-            <| Dict.toList d
-          ]
-        JList l -> table [ class "table is-fullwidth is-hoverable" ]
-          [ tbody []
-            <| List.indexedMap
-              (\i v ->
-                tr [ onClick (SelectListItem paneln i) ]
-                  [ td [] [ text <| toString i ]
-                  , td [] [ viewValue v ]
-                  ]
-              )
-            <| l
-          ]
-      Err e -> text e
+  case decodeString multiDecoder json of
+    Ok jrepr -> case jrepr of
+      JScalar scalar -> scalarView scalar
+      JDict d -> table [ class "table is-fullwidth is-hoverable" ]
+        [ tbody []
+          <| List.map
+            (\(k, v) ->
+              tr [ onClick (SelectDictItem paneln k) ]
+                [ td [] [ text k ]
+                , td [] [ viewValue v ]
+                ]
+            )
+          <| Dict.toList d
+        ]
+      JList l -> table [ class "table is-fullwidth is-hoverable" ]
+        [ tbody []
+          <| List.indexedMap
+            (\i v ->
+              tr [ onClick (SelectListItem paneln i) ]
+                [ td [] [ text <| toString i ]
+                , td [] [ viewValue v ]
+                ]
+            )
+          <| l
+        ]
+    Err e -> text json
 
 viewValue : Value -> Html Msg
 viewValue jval =
