@@ -35,14 +35,18 @@ type Tab = Input | View
 type alias Panel =
   { enabled : Bool
   , filter : FilterString
-  , output : JSONString
+  , output : Result ErrorString JSONString
   }
 
-getfilter : Int -> Array Panel -> String
+getfilter : Int -> Array Panel -> FilterString
 getfilter index panels = get index panels |> Maybe.map .filter |> Maybe.withDefault "."
 
-getoutput : Int -> Array Panel -> String
-getoutput index panels = get index panels |> Maybe.map .output |> Maybe.withDefault "."
+getoutput : Int -> Array Panel -> JSONString
+getoutput index panels =
+  get index panels
+    |> Maybe.map .output
+    |> Maybe.map (Result.withDefault "")
+    |> Maybe.withDefault "."
 
 getinputfor : Int -> Model -> String
 getinputfor index model =
@@ -50,7 +54,7 @@ getinputfor index model =
     0 -> model.input
     _ -> getoutput (index - 1) model.panels
 
-setfilter : Int -> String -> Array Panel -> Array Panel
+setfilter : Int -> FilterString -> Array Panel -> Array Panel
 setfilter index filter panels =
   case get index panels of
     Nothing -> panels
@@ -66,11 +70,17 @@ disablefrom : Int -> Array Panel -> Array Panel
 disablefrom index panels =
   Array.indexedMap (\i p -> if i >= index then { p | enabled = False } else p) panels
 
-setoutput : Int -> String -> Array Panel -> Array Panel
+setoutput : Int -> JSONString -> Array Panel -> Array Panel
 setoutput index output panels =
   case get index panels of
     Nothing -> panels
-    Just p -> set index { p | output = output } panels
+    Just p -> set index { p | output = Ok output } panels
+
+seterror : Int -> ErrorString -> Array Panel -> Array Panel
+seterror index error panels =
+  case get index panels of
+    Nothing -> panels
+    Just p -> set index { p | output = Err error } panels
 
 init : (Model, Cmd Msg)
 init =
@@ -78,8 +88,8 @@ init =
     { tab = View
     , input = "{\"x\": 23}"
     , panels = Array.fromList <|
-      [ Panel True "." ""
-      , Panel True "" ""
+      [ Panel True "." (Ok "")
+      , Panel True "" (Ok "")
       ]
     }
   in
@@ -92,9 +102,10 @@ init =
 
 type Msg
   = SelectTab Tab
-  | SetInput String
-  | SetFilter Int String
-  | GotResult (Int, String)
+  | SetInput JSONString
+  | SetFilter Int FilterString
+  | GotResult (Int, JSONString)
+  | GotError (Int, ErrorString)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -118,16 +129,24 @@ update msg model =
           _ ->
             ( if length upd.panels == i + 1
               then -- add a new panel
-                { upd | panels = upd.panels |> push (Panel True "" "") }
+                { upd | panels = upd.panels |> push (Panel True "" (Ok "")) }
               else -- enable the next panel
                 { upd | panels = upd.panels |> enable (i + 1) }
             , applyfilter (i, (getinputfor i upd), v)
             )
     GotResult (i, v) ->
-      ( { model | panels = setoutput i v model.panels }
+      ( { model | panels = model.panels |> setoutput i v }
       , if length model.panels > i + 1
         then applyfilter ((i + 1), v, (getfilter (i + 1) model.panels))
         else Cmd.none
+      )
+    GotError (i, e) ->
+      ( { model
+          | panels = model.panels
+            |> seterror i e
+            |> disablefrom (i + 1)
+        }
+      , Cmd.none
       )
 
 
@@ -137,6 +156,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
   Sub.batch
     [ gotresult GotResult
+    , goterror GotError
     ]
 
 
@@ -175,7 +195,11 @@ viewPanel : Int -> Panel -> Html Msg
 viewPanel i {filter, output} =
   div [ class "panel column" ]
     [ input [ class "input", onInput (SetFilter i), value filter ] []
-    , div [ class "box" ] [ viewJSON output ]
+    , div [ class "box" ]
+      [ case output of
+        Ok json -> viewJSON json
+        Err err -> div [ class "error" ] [ text err ]
+      ]
     ]
 
 
