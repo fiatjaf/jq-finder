@@ -2,7 +2,11 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Platform.Sub as Sub
-import Json.Encode
+import Json.Decode as J exposing
+  ( string, float, null, bool, dict, array, oneOf
+  , Value, Decoder, decodeString, decodeValue
+  )
+import Dict exposing (Dict)
 import Array exposing (Array, get, set, push, length)
 
 import Ports exposing (..)
@@ -103,14 +107,14 @@ update msg model =
       let upd = { model | panels = model.panels |> setfilter i v }
       in
         case v of
-          "" -> -- disable all panels next
+          "" -> -- erase this output and disable all panels next
             ( { upd | panels = upd.panels
                 |> setoutput i ""
                 |> disablefrom (i + 1)
               }
             , Cmd.none
             )
-          _ -> -- proceed normally
+          _ ->
             ( if length upd.panels == i + 1
               then -- add a new panel
                 { upd | panels = upd.panels |> push (Panel True "" "") }
@@ -120,7 +124,9 @@ update msg model =
             )
     GotResult (i, v) ->
       ( { model | panels = setoutput i v model.panels }
-      , applyfilter ((i + 1), v, (getfilter (i + 1) model.panels))
+      , if length model.panels > i + 1
+        then applyfilter ((i + 1), v, (getfilter (i + 1) model.panels))
+        else Cmd.none
       )
 
 
@@ -168,6 +174,72 @@ viewPanel : Int -> Panel -> Html Msg
 viewPanel i {filter, output} =
   div [ class "panel column" ]
     [ input [ class "input", onInput (SetFilter i), value filter ] []
-    , div [ class "box" ] [ text output ]
+    , div [ class "box" ] [ viewJSON output ]
     ]
-    
+
+
+type JRepr
+  = JScalar JScalarRepr 
+  | JDict (Dict String Value)
+  | JArray (Array Value)
+
+type JScalarRepr
+  = JNull
+  | JString String
+  | JBool Bool
+  | JNum Float
+
+multiDecoder : Decoder JRepr
+multiDecoder = oneOf
+  [ J.map JScalar <| J.map JString string
+  , J.map JScalar <| J.map JBool bool
+  , J.map JScalar <| J.map JNum float
+  , J.map JScalar <| null JNull
+  , J.map JDict (dict J.value)
+  , J.map JArray (array J.value)
+  ]
+
+viewJSON : JSONString -> Html Msg
+viewJSON json =
+  case decodeString multiDecoder json of
+    Ok jrepr -> case jrepr of
+      JScalar scalar -> scalarView scalar
+      JDict d -> table [ class "table is-fullwidth is-hoverable" ]
+        [ tbody []
+          <| List.map
+            (\(k, v) ->
+              tr []
+                [ td [] [ text k ]
+                , td [] [ viewValue v ]
+                ]
+            )
+          <| Dict.toList d
+        ]
+      JArray a -> table [ class "table is-fullwidth is-hoverable" ]
+        [ tbody []
+          <| List.indexedMap
+            (\i v ->
+              tr []
+                [ td [] [ text <| toString i ]
+                , td [] [ viewValue v ]
+                ]
+            )
+          <| Array.toList a
+        ]
+    Err e -> text e
+
+viewValue : Value -> Html Msg
+viewValue jval =
+  case decodeValue multiDecoder jval of
+    Ok jrepr -> case jrepr of
+      JScalar scalar -> scalarView scalar
+      JDict _ -> text "{}"
+      JArray _ -> text "[]"
+    Err e -> text e
+
+scalarView : JScalarRepr -> Html Msg
+scalarView jrepr = case jrepr of
+  JNull -> span [ class "null" ] [ text "null" ]
+  JBool b -> span [ class "bool" ] [ text <| if b then "true" else "false" ]
+  JNum n -> span [ class "num" ] [ text <| toString n ]
+  JString s -> span [ class "string" ] [ text <| "\"" ++ s ++ "\"" ]

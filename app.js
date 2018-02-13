@@ -8,7 +8,7 @@ const app = Elm.Main.embed(target)
 
 app.ports.applyfilter_.subscribe(debounce(([i, input, filter]) => {
   if (input === '') {
-    app.ports.send([i, ''])
+    app.ports.gotresult.send([i, ''])
     return
   }
 
