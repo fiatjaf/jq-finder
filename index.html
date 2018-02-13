@@ -12,6 +12,10 @@ input, textarea, .panel {
   margin: 23px;
 }
 
+.filter {
+  color: #333;
+}
+
 .panel {}
   .panel .box { margin-top: 23px }
 
@@ -22,9 +26,12 @@ input, textarea, .panel {
     .panel tr { cursor: pointer; }
   .panel .string { color: seagreen }
   .panel .null { color: lightblue }
-  .panel .num { color: orangered }
+  .panel .num { color: palevioletred }
   .panel .bool { color: darkblue }
   .panel .sub { font-size: 0.9em; }
+    .panel .sub .list { color: olive }
+    .panel .sub .object { color: teal }
+      .panel .sub .object .key { color: orangered }
 
 </style>
 <body>

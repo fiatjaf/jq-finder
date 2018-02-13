@@ -284,7 +284,7 @@ viewValue jval =
   case decodeValue multiDecoder jval of
     Ok jrepr -> case jrepr of
       JScalar scalar -> scalarView scalar
-      JDict d -> div [ class "sub" ]
+      JDict d -> div [ class "sub dict" ]
         <| List.concat
           [ [ text "{" ]
           , List.intersperse (text ", ")
@@ -294,7 +294,7 @@ viewValue jval =
           , if Dict.size d > 3 then [ text ", …" ] else []
           , [ text "}" ]
           ]
-      JList l -> div [ class "sub" ]
+      JList l -> div [ class "sub list" ]
         <| List.concat
           [ [ text "[" ]
           , List.intersperse (text ", ")
@@ -307,7 +307,7 @@ viewValue jval =
     Err e -> text e
 
 dictSubView : (String, Value) -> Html Msg
-dictSubView (k, _) = span [ class "string" ] [ text k ]
+dictSubView (k, _) = span [ class "key" ] [ text k ]
 
 arraySubView : Value -> Html Msg
 arraySubView jval =
