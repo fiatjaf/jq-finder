@@ -11,7 +11,7 @@ import Dict exposing (Dict)
 import List exposing (take, any, range, intersperse, concat)
 import Array exposing (Array, get, set, push, length)
 import Char exposing (toCode)
-import String exposing (trim)
+import String exposing (trim, join)
 
 import Ports exposing (..)
 
@@ -49,6 +49,15 @@ getfiltersuntil to panels =
     |> Array.toList
     |> take (to + 1)
     |> List.map .filter
+
+joinfilters : List FilterString -> FilterString
+joinfilters filters =
+  ". as $input | " ++
+    ( filters
+      |> List.filter (trim >> (/=) "")
+      |> join " | "
+      |> \f -> if f /= "" then f else "."
+    )
 
 setfilter : Int -> FilterString -> Array Panel -> Array Panel
 setfilter index filter panels =
@@ -229,7 +238,7 @@ subscriptions model =
 view : Model -> Html Msg
 view model =
   div []
-    [ div [ class "tabs" ]
+    [ div [ class "tabs is-centered is-boxed" ]
       [ ul []
         [ li [ class <| if model.tab == Input then "is-active" else "" ]
           [ a [ onClick (SelectTab Input) ]
@@ -242,6 +251,13 @@ view model =
             ]
           ]
         ]
+      ]
+    , div [ class "container", id "resulting-filter" ]
+      [ model.panels
+        |> Array.toList
+        |> List.map .filter
+        |> joinfilters
+        |> text
       ]
     , case model.tab of
       Input ->
