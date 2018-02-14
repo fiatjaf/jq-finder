@@ -1,17 +1,18 @@
 /* global Elm */
 
 const debounce = require('debounce')
-const jq = require('jq-web')
+const jq = require('jq-web/jq.wasm.min.js')
 
 const target = document.querySelector('main')
-
 
 const app = Elm.Main.embed(target, {
   input: localStorage.getItem('input') || '',
   filters: JSON.parse(localStorage.getItem('filters') || '["."]')
 })
 
-app.ports.applyfilter.subscribe(debounce(([raw, i, filters]) => {
+app.ports.applyfilter.subscribe(debounce(applyfilter, 600))
+
+function applyfilter ([raw, i, filters]) {
   let filter = filters
     .filter(x => x.trim())
     .join('|') || '.'
@@ -24,7 +25,10 @@ app.ports.applyfilter.subscribe(debounce(([raw, i, filters]) => {
     let res = jq.raw(raw, prelude + filter)
     app.ports.gotresult.send([i, res])
   } catch (e) {
-    console.log(e)
+    if (typeof e === 'string' && e.slice(0, 5) === 'abort') {
+      setTimeout(applyfilter, 500, [raw, i, filters])
+      return
+    }
     app.ports.goterror.send([i, e.message])
   }
 
@@ -39,4 +43,4 @@ app.ports.applyfilter.subscribe(debounce(([raw, i, filters]) => {
   if (storedfilters.length === 0) storedfilters = ['.']
   localStorage.setItem('filters', JSON.stringify(storedfilters))
   localStorage.setItem('input', raw)
-}, 600))
+}
