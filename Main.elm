@@ -4,6 +4,7 @@ import Html.Events exposing (onClick, onInput, on)
 import Http
 import Platform.Sub as Sub
 import Mouse
+import Tuple exposing (second)
 import Json.Decode as J exposing
   ( string, float, null, bool, dict, oneOf
   , Value, Decoder, decodeString, decodeValue
@@ -51,15 +52,6 @@ getfiltersuntil to panels =
     |> Array.toList
     |> take (to + 1)
     |> List.map .filter
-
-joinfilters : List String -> String
-joinfilters filters =
-  ". as $input | " ++
-    ( filters
-      |> List.filter (trim >> (/=) "")
-      |> join " | "
-      |> \f -> if f /= "" then f else "."
-    )
 
 setfilter : Int -> String -> Array Panel -> Array Panel
 setfilter index filter panels =
@@ -132,6 +124,7 @@ type Msg
   | SelectListItem Int Int
   | GotResult (Int, String)
   | GotError (Int, String)
+  | GoToPanel Int
   | DragStart Int Mouse.Position
   | DragAt Mouse.Position
   | DragEnd Mouse.Position
@@ -207,6 +200,10 @@ update msg model =
         }
       , Cmd.none
       )
+    GoToPanel paneln ->
+      ( model
+      , scrollintopanel paneln
+      )
     DragStart paneln {x} ->
       ( case get paneln model.panels of
           Just panel ->
@@ -269,12 +266,19 @@ view model =
         ]
       ]
     , div [ class "container", id "resulting-filter" ]
-      [ model.panels
-        |> Array.toList
-        |> List.map .filter
-        |> joinfilters
-        |> text
-      ]
+      <| (::) (text ". as $input | ")
+      <| intersperse (text " | ")
+      <| List.map
+        (\(i, f) ->
+          span
+            [ class "partial-filter"
+            , onClick (GoToPanel i)
+            ] [ text f ]
+        )
+      <| List.filter (second >> trim >> (/=) "")
+      <| List.indexedMap (\i p -> (i, p.filter))
+      <| List.filter .enabled
+      <| Array.toList model.panels
     , case model.tab of
       Input ->
         div [ id "input" ]
