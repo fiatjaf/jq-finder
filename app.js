@@ -1,6 +1,6 @@
 /* global Elm */
 
-const debounce = require('debounce')
+const debounceWithArgs = require('debounce-with-args')
 const jq = require('jq-web/jq.wasm.min.js')
 
 const target = document.querySelector('main')
@@ -29,7 +29,13 @@ app.ports.savepanelwidth.subscribe(([paneln, width]) => {
   localStorage.setItem('widths', JSON.stringify(storedwidths))
 })
 
-app.ports.applyfilter.subscribe(debounce(applyfilter, 600))
+app.ports.applyfilter.subscribe(
+  debounceWithArgs(
+    applyfilter,
+    600,
+    args => args[0][1]
+  )
+)
 
 function applyfilter ([raw, i, filters]) {
   let filter = filters

@@ -164,7 +164,8 @@ update msg model =
                 [ Cmd.batch
                   <| List.map
                     (\pi ->
-                      applyfilter (model.input, pi, upd.panels |> getfiltersuntil pi)
+                      let filters = (upd.panels |> getfiltersuntil pi)
+                      in applyfilter (model.input, pi, filters)
                     )
                   <| range i <| (Array.length upd.panels) - 1
                 , scrollintopanel (i + 1)
