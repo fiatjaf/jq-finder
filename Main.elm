@@ -1,13 +1,14 @@
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onClick, onInput, on)
 import Platform.Sub as Sub
+import Mouse
 import Json.Decode as J exposing
   ( string, float, null, bool, dict, oneOf
   , Value, Decoder, decodeString, decodeValue
   )
 import Dict exposing (Dict)
-import List exposing (take, any, range)
+import List exposing (take, any, range, intersperse, concat)
 import Array exposing (Array, get, set, push, length)
 import Char exposing (toCode)
 import String exposing (trim)
@@ -30,6 +31,7 @@ type alias Model =
   { tab : Tab
   , input : JSONString
   , panels : Array Panel
+  , drag : Maybe (Int, Int)
   }
 
 type Tab = Input | View
@@ -38,6 +40,7 @@ type alias Panel =
   { enabled : Bool
   , filter : FilterString
   , output : Result ErrorString JSONString
+  , w : Int
   }
 
 getfiltersuntil : Int -> Array Panel -> List FilterString
@@ -94,8 +97,9 @@ init {input, filters} =
     { tab = View
     , input = input
     , panels = filters
-      |> List.map (\f -> Panel True f (Ok ""))
+      |> List.map (\f -> Panel True f (Ok "") 250)
       |> Array.fromList
+    , drag = Nothing
     }
   in
     ( model
@@ -116,6 +120,9 @@ type Msg
   | SelectListItem Int Int
   | GotResult (Int, JSONString)
   | GotError (Int, ErrorString)
+  | DragStart Int Mouse.Position
+  | DragAt Mouse.Position
+  | DragEnd Mouse.Position
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -142,7 +149,7 @@ update msg model =
           _ ->
             ( if length upd.panels == i + 1
               then -- add a new panel
-                { upd | panels = upd.panels |> push (Panel True "" (Ok "")) }
+                { upd | panels = upd.panels |> push (Panel True "" (Ok "") 250) }
               else -- enable the next panel
                 { upd | panels = upd.panels |> enable (i + 1) }
             , Cmd.batch
@@ -168,6 +175,27 @@ update msg model =
         }
       , Cmd.none
       )
+    DragStart paneln {x} ->
+      ( case get paneln model.panels of
+          Just panel ->
+            { model | drag = Just (paneln, x - panel.w) }
+          Nothing -> model
+      , Cmd.none
+      )
+    DragAt {x} ->
+      ( case model.drag of
+          Just (paneln, initx) ->
+            case get paneln model.panels of
+              Just panel ->
+                { model | panels = model.panels |> set paneln { panel | w = x - initx } }
+              Nothing -> model
+          Nothing -> model
+      , Cmd.none
+      )
+    DragEnd _ ->
+      ( { model | drag = Nothing }
+      , Cmd.none
+      )
 
 
 -- SUBSCRIPTIONS
@@ -177,6 +205,10 @@ subscriptions model =
   Sub.batch
     [ gotresult GotResult
     , goterror GotError
+    , case model.drag of
+      Nothing -> Sub.none
+      Just _ ->
+        Sub.batch [ Mouse.moves DragAt, Mouse.ups DragEnd ]
     ]
 
 
@@ -205,22 +237,17 @@ view model =
           [ textarea [ class "textarea", onInput SetInput ] [ text model.input ]
           ]
       View ->
-        let
-          panels = List.filter .enabled
-            <| Array.toList model.panels
-          npanels = List.length panels
-          hidden = if npanels > 3 then npanels - 3 else 0
-        in
-          div [ id "panels", class "columns is-multiline" ]
-            <| List.indexedMap (viewPanel hidden)
-            <| panels
+        div [ id "panels" ]
+          <| List.indexedMap viewPanel
+          <| List.filter .enabled
+          <| Array.toList model.panels
     ]
 
-viewPanel : Int -> Int -> Panel -> Html Msg
-viewPanel hidden i {filter, output} =
+viewPanel : Int -> Panel -> Html Msg
+viewPanel i {filter, output, w} =
   div
-    [ class "panel column is-4"
-    , style <| if i < hidden then [("display", "none")] else []
+    [ class "panel"
+    , style [("width", toString w ++ "px")]
     ]
     [ input [ class "input", onInput (SetFilter i), value filter ] []
     , div [ class "box" ]
@@ -228,6 +255,10 @@ viewPanel hidden i {filter, output} =
         Ok json -> viewJSON i json
         Err err -> div [ class "error" ] [ text err ]
       ]
+    , div
+      [ class "resize-handle"
+      , on "mousedown" (J.map (DragStart i) Mouse.position)
+      ] []
     ]
 
 
@@ -287,9 +318,9 @@ viewValue jval =
     Ok jrepr -> case jrepr of
       JScalar scalar -> scalarView scalar
       JDict d -> div [ class "sub dict" ]
-        <| List.concat
+        <| concat
           [ [ text "{" ]
-          , List.intersperse (text ", ")
+          , intersperse (text ", ")
             <| List.map dictSubView
             <| take 3
             <| Dict.toList d
@@ -297,9 +328,9 @@ viewValue jval =
           , [ text "}" ]
           ]
       JList l -> div [ class "sub list" ]
-        <| List.concat
+        <| concat
           [ [ text "[" ]
-          , List.intersperse (text ", ")
+          , intersperse (text ", ")
             <| List.map arraySubView
             <| take 3
             <| l

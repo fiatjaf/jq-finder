@@ -21,11 +21,33 @@ input, textarea, .panel {
     min-height: 500px;
   }
 
-.panel {}
+#panels {
+  min-height: 400px;
+  overflow-x: auto;
+  display: flex;
+  flex-wrap: nowrap;
+}
+.panel {
+  flex: 0 0 auto;
+  float: left;
+  width: 250px;
+  height: 100%;
+  position: relative;
+  margin-right: 12px;
+}
+  .panel .resize-handle {
+    height: 100%;
+    position: absolute;
+    z-index: 10;
+    top: 0;
+    bottom: 0;
+    right: -3px;
+    width: 6px;
+    background: none;
+    cursor: col-resize;
+  }
   .panel .box { margin-top: 23px }
-
   .panel .error { color: red; }
-
   .panel table { margin-bottom: 0; }
     .panel tr { cursor: pointer; }
     .panel td:first-child {
