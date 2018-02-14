@@ -1,12 +1,8 @@
 port module Ports exposing (..)
 
-port applyfilter : (JSONString, Int, List FilterString) -> Cmd msg
+port applyfilter : (String, Int, List String) -> Cmd msg
 port scrollintopanel : Int -> Cmd msg
 port savepanelwidth : (Int, Int) -> Cmd msg
 
-port gotresult : ((Int, JSONString) -> msg) -> Sub msg
-port goterror : ((Int, ErrorString) -> msg) -> Sub msg
-
-type alias FilterString = String
-type alias JSONString = String
-type alias ErrorString = String
+port gotresult : ((Int, String) -> msg) -> Sub msg
+port goterror : ((Int, String) -> msg) -> Sub msg

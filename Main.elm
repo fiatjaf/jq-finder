@@ -1,6 +1,7 @@
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput, on)
+import Http
 import Platform.Sub as Sub
 import Mouse
 import Json.Decode as J exposing
@@ -11,7 +12,7 @@ import Dict exposing (Dict)
 import List exposing (take, any, range, intersperse, concat)
 import Array exposing (Array, get, set, push, length)
 import Char exposing (toCode)
-import String exposing (trim, join)
+import String exposing (trim, join, startsWith)
 
 import Ports exposing (..)
 
@@ -29,7 +30,8 @@ main =
 
 type alias Model =
   { tab : Tab
-  , input : JSONString
+  , input : String
+  , url : Maybe String
   , panels : Array Panel
   , drag : Maybe (Int, Int)
   }
@@ -38,19 +40,19 @@ type Tab = Input | View
 
 type alias Panel =
   { enabled : Bool
-  , filter : FilterString
-  , output : Result ErrorString JSONString
+  , filter : String
+  , output : Result String String
   , w : Int
   }
 
-getfiltersuntil : Int -> Array Panel -> List FilterString
+getfiltersuntil : Int -> Array Panel -> List String
 getfiltersuntil to panels =
   panels
     |> Array.toList
     |> take (to + 1)
     |> List.map .filter
 
-joinfilters : List FilterString -> FilterString
+joinfilters : List String -> String
 joinfilters filters =
   ". as $input | " ++
     ( filters
@@ -59,7 +61,7 @@ joinfilters filters =
       |> \f -> if f /= "" then f else "."
     )
 
-setfilter : Int -> FilterString -> Array Panel -> Array Panel
+setfilter : Int -> String -> Array Panel -> Array Panel
 setfilter index filter panels =
   case get index panels of
     Nothing -> panels
@@ -75,13 +77,13 @@ disablefrom : Int -> Array Panel -> Array Panel
 disablefrom index panels =
   Array.indexedMap (\i p -> if i >= index then { p | enabled = False } else p) panels
 
-setoutput : Int -> JSONString -> Array Panel -> Array Panel
+setoutput : Int -> String -> Array Panel -> Array Panel
 setoutput index output panels =
   case get index panels of
     Nothing -> panels
     Just p -> set index { p | output = Ok output } panels
 
-seterror : Int -> ErrorString -> Array Panel -> Array Panel
+seterror : Int -> String -> Array Panel -> Array Panel
 seterror index error panels =
   case get index panels of
     Nothing -> panels
@@ -105,6 +107,7 @@ init {input, filters, widths} =
   let model =
     { tab = View
     , input = input
+    , url = Nothing
     , panels = Array.fromList
       <| List.map2 (\f w -> Panel True f (Ok "") w) filters widths
     , drag = Nothing
@@ -122,12 +125,13 @@ init {input, filters, widths} =
 
 type Msg
   = SelectTab Tab
-  | SetInput JSONString
-  | SetFilter Int FilterString
+  | SetInput Bool String
+  | InputURLResult (Result Http.Error String)
+  | SetFilter Int String
   | SelectDictItem Int String
   | SelectListItem Int Int
-  | GotResult (Int, JSONString)
-  | GotError (Int, ErrorString)
+  | GotResult (Int, String)
+  | GotError (Int, String)
   | DragStart Int Mouse.Position
   | DragAt Mouse.Position
   | DragEnd Mouse.Position
@@ -136,13 +140,24 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     SelectTab t -> ({ model | tab = t }, Cmd.none)
-    SetInput v ->
-      ( { model | input = v }
-      , Cmd.batch
+    SetInput manual v ->
+      if v |> startsWith "http"
+      then
+        ( { model | url = Just <| trim v }
+        , Http.getString (trim v)
+          |> Http.send InputURLResult
+        )
+      else
+        ( { model | input = v, url = if manual then Nothing else model.url }
+        , Cmd.batch
           <| List.map
             (\pi -> applyfilter (model.input, pi, model.panels |> getfiltersuntil pi))
           <| range 0 (Array.length model.panels)
-      )
+        )
+    InputURLResult res ->
+      case res of
+        Ok json -> update (SetInput False json) model
+        Err err -> update (SetInput False (toString err)) model
     SetFilter i v ->
       let upd = { model | panels = model.panels |> setfilter i v }
       in
@@ -263,7 +278,13 @@ view model =
     , case model.tab of
       Input ->
         div [ id "input" ]
-          [ textarea [ class "textarea", onInput SetInput ] [ text model.input ]
+          [ div [ class "container has-text-centered" ] [ text <| Maybe.withDefault "" model.url ]
+          , textarea
+            [ class "textarea"
+            , onInput (SetInput True)
+            , value model.input
+            , placeholder "Paste and URL here, or your JSON string directly."
+            ] [ text model.input ]
           ]
       View ->
         div [ id "panels" ]
@@ -312,7 +333,7 @@ multiDecoder = oneOf
   , J.map JList (J.list J.value)
   ]
 
-viewJSON : Int -> JSONString -> Html Msg
+viewJSON : Int -> String -> Html Msg
 viewJSON paneln json =
   case decodeString multiDecoder json of
     Ok jrepr -> case jrepr of
