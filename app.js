@@ -7,7 +7,19 @@ const target = document.querySelector('main')
 
 const app = Elm.Main.embed(target, {
   input: localStorage.getItem('input') || '',
-  filters: JSON.parse(localStorage.getItem('filters') || '["."]')
+  filters: JSON.parse(localStorage.getItem('filters') || '["."]'),
+  widths: JSON.parse(localStorage.getItem('widths') || '[250]')
+})
+
+app.ports.savepanelwidth.subscribe(([paneln, width]) => {
+  var storedwidths = JSON.parse(localStorage.getItem('widths') || '[]')
+  if (storedwidths.length < paneln + 1) {
+    storedwidths.push(width)
+  } else {
+    storedwidths[paneln] = width
+  }
+  if (storedwidths.length === 0) storedwidths = ['.']
+  localStorage.setItem('widths', JSON.stringify(storedwidths))
 })
 
 app.ports.applyfilter.subscribe(debounce(applyfilter, 600))

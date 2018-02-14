@@ -91,14 +91,13 @@ hasNonAsciiLetter s =
           (code > 122)
       )
 
-init : { input : String, filters : List String } -> (Model, Cmd Msg)
-init {input, filters} =
+init : { input : String, filters : List String, widths : List Int } -> (Model, Cmd Msg)
+init {input, filters, widths} =
   let model =
     { tab = View
     , input = input
-    , panels = filters
-      |> List.map (\f -> Panel True f (Ok "") 250)
-      |> Array.fromList
+    , panels = Array.fromList
+      <| List.map2 (\f w -> Panel True f (Ok "") w) filters widths
     , drag = Nothing
     }
   in
@@ -153,9 +152,17 @@ update msg model =
               else -- enable the next panel
                 { upd | panels = upd.panels |> enable (i + 1) }
             , Cmd.batch
-              <| List.map
-                (\pi -> applyfilter (model.input, pi, upd.panels |> getfiltersuntil pi))
-              <| range i <| (Array.length upd.panels) - 1
+                [ Cmd.batch
+                  <| List.map
+                    (\pi ->
+                      applyfilter (model.input, pi, upd.panels |> getfiltersuntil pi)
+                    )
+                  <| range i <| (Array.length upd.panels) - 1
+                , scrollintopanel (i + 1)
+                , case get (i + 1) upd.panels of
+                    Nothing -> savepanelwidth ((i + 1), 250)
+                    Just panel -> savepanelwidth ((i + 1), panel.w)
+                ]
             )
     SelectDictItem paneln key ->
       if hasNonAsciiLetter key
@@ -194,7 +201,12 @@ update msg model =
       )
     DragEnd _ ->
       ( { model | drag = Nothing }
-      , Cmd.none
+      , case model.drag of
+          Nothing -> Cmd.none
+          Just (paneln, _) ->
+            case get paneln model.panels of
+              Nothing -> Cmd.none
+              Just panel -> savepanelwidth (paneln, panel.w)
       )
 
 
