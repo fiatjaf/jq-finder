@@ -1,6 +1,7 @@
 port module Ports exposing (..)
 
 port applyfilter : (JSONString, Int, List FilterString) -> Cmd msg
+port scrollintopanel : Int -> Cmd msg
 port savepanelwidth : (Int, Int) -> Cmd msg
 
 port gotresult : ((Int, JSONString) -> msg) -> Sub msg

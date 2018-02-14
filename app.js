@@ -11,6 +11,13 @@ const app = Elm.Main.embed(target, {
   widths: JSON.parse(localStorage.getItem('widths') || '[250]')
 })
 
+app.ports.scrollintopanel.subscribe(paneln => {
+  setTimeout(() => {
+    let el = document.getElementsByClassName('panel')[paneln]
+    el.scrollIntoView({behavior: 'instant', block: 'end', inline: 'nearest'})
+  }, 250)
+})
+
 app.ports.savepanelwidth.subscribe(([paneln, width]) => {
   var storedwidths = JSON.parse(localStorage.getItem('widths') || '[]')
   if (storedwidths.length < paneln + 1) {
