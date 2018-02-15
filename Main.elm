@@ -255,7 +255,7 @@ view model =
       [ ul []
         [ li [ class <| if model.tab == Input then "is-active" else "" ]
           [ a [ onClick (SelectTab Input) ]
-            [ text "Input"
+            [ text "JSON Input"
             ]
           ]
         , li [ class <| if model.tab == View then "is-active" else "" ]
