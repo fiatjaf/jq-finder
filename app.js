@@ -1,7 +1,6 @@
-/* global Elm */
+/* global Elm, jq */
 
 const debounceWithArgs = require('debounce-with-args')
-const jq = require('jq-web/jq.wasm.min.js')
 
 const target = document.querySelector('main')
 
@@ -46,16 +45,16 @@ function applyfilter ([raw, i, filters]) {
 
   console.log('jq', filters)
 
-  try {
-    let res = jq.raw(raw, prelude + filter)
-    app.ports.gotresult.send([i, res])
-  } catch (e) {
-    if (typeof e === 'string' && e.slice(0, 5) === 'abort') {
-      setTimeout(applyfilter, 500, [raw, i, filters])
-      return
-    }
-    app.ports.goterror.send([i, e.message])
-  }
+  jq.promised.raw(raw, prelude + filter)
+    .then(res => app.ports.gotresult.send([i, res]))
+    .catch(e => {
+      if (typeof e === 'string' && e.slice(0, 5) === 'abort') {
+        setTimeout(applyfilter, 500, [raw, i, filters])
+        return
+      }
+      console.error(e)
+      app.ports.goterror.send([i, e.message])
+    })
 
   var storedfilters = JSON.parse(localStorage.getItem('filters') || '[]')
   for (let i = 0; i < filters.length; i++) {

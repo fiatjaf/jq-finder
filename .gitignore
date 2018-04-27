@@ -4,4 +4,5 @@ elm-stuff
 *.swo
 *.swp
 browserify-cache.json
-*.wasm
+jq.wasm.wasm
+jq.wasm.js
